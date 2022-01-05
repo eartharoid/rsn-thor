@@ -48,7 +48,6 @@ class Bot extends DiscordClient {
 				try {
 					const member = guild.members.cache.get(ban.user.id);
 					if (member && !member.bannable) return log.warn(`Can't ban "${ban.user.username}#${ban.user.discriminator}" from ${guild.name}`); // permission check
-
 					await guild.bans.create(ban.user.id, {
 						days: 1,
 						reason: `[SYNC] Relayed ban from \`${ban.guild.name}\` - check the origin server's audit log or ban list for details.${ban.reason ? `\n\n\`${ban.reason}\`` : ''}`
@@ -79,8 +78,33 @@ class Bot extends DiscordClient {
 			ignore.delete(ban.user.id);
 		});
 
-		this.on('guildMemberUpdate', async (_member, member) => {
-			// member.moderatable
+		this.on('guildMemberUpdate', async (old_member, new_member) => {
+			console.log('ey')
+			if (ignore.has(new_member.id)) return; // prevent cascading
+			ignore.add(new_member.id);
+			const mute = !old_member.isCommunicationDisabled() && new_member.isCommunicationDisabled();
+			const unmute = old_member.isCommunicationDisabled() && !new_member.isCommunicationDisabled();
+			if (mute || unmute) {
+				log.info(`Time out ${mute ? 'added' : 'removed'} in ${new_member.guild.name}`);
+				for (const server of servers.filter(id => id !== new_member.guild.id)) {
+					const guild = this.guilds.cache.get(server);
+					if (!guild?.available) return log.warn(`Guild "${guild?.name}" is unavailable`);
+					try {
+						const member = await guild.members.fetch(new_member.id);
+						if (!member.moderatable) return log.warn(`Cannot moderate "${new_member.user.tag}"`);
+						if (mute) { // has been muted
+							await member.disableCommunicationUntil(new_member.communicationDisabledUntil, `[SYNC] Relayed mute from \`${new_member.guild.name}\` - check the origin server's audit log for details.`);
+							log.info(`Muted "${new_member.user.tag}" in "${guild.name}"`);
+						} else if (unmute) { // has been unmuted
+							await member.disableCommunicationUntil(null, `[SYNC] Relayed unmute from \`${new_member.guild.name}\` - check the origin server's audit log for details.`);
+							log.info(`Unmuted "${new_member.user.tag}" in "${guild.name}"`);
+						}
+					} catch (error) {
+						log.error(`Failed to mute/unmute "${new_member.user.tag}" in "${guild.name}":\n${error}`);
+					}
+				}
+			}
+			ignore.delete(new_member.id);
 		});
 
 		this.login();
