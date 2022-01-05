@@ -5,7 +5,8 @@ const ignore = new Set();
 
 const Logger = require('leekslazylogger');
 const {
-	ConsoleTransport, FileTransport
+	ConsoleTransport,
+	FileTransport
 } = require('leekslazylogger/dist/transports');
 const log = new Logger({
 	name: 'RsN / Global Moderation',
@@ -45,8 +46,6 @@ class Bot extends DiscordClient {
 				const guild = this.guilds.cache.get(server);
 				if (!guild?.available) return log.warn(`Guild "${guild?.name}" is unavailable`);
 				try {
-					// if (guild.bans.cache.has(ban.user)) return; //  skip if they're already banned
-
 					const member = guild.members.cache.get(ban.user.id);
 					if (member && !member.bannable) return log.warn(`Can't ban "${ban.user.username}#${ban.user.discriminator}" from ${guild.name}`); // permission check
 
@@ -57,7 +56,6 @@ class Bot extends DiscordClient {
 					log.info(`Banned "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}"`);
 				} catch (error) {
 					log.error(`Failed to ban "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}":\n${error}`);
-					// log.error(error);
 				}
 			}
 			ignore.delete(ban.user.id);
@@ -72,12 +70,10 @@ class Bot extends DiscordClient {
 				const guild = this.guilds.cache.get(server);
 				if (!guild?.available) return log.warn(`Guild "${guild?.name}" is unavailable`);
 				try {
-					// if (guild.bans.cache.has(ban.user))
 					await guild.bans.remove(ban.user.id);
 					log.info(`Unbanned "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}"`);
 				} catch (error) {
 					log.error(`Failed to unban "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}":\n${error}`);
-					// log.error(error);
 				}
 			}
 			ignore.delete(ban.user.id);
