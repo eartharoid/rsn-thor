@@ -79,7 +79,6 @@ class Bot extends DiscordClient {
 		});
 
 		this.on('guildMemberUpdate', async (old_member, new_member) => {
-			console.log('ey')
 			if (ignore.has(new_member.id)) return; // prevent cascading
 			ignore.add(new_member.id);
 			const mute = !old_member.isCommunicationDisabled() && new_member.isCommunicationDisabled();
