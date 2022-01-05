@@ -1,9 +1,19 @@
 require('dotenv').config();
 
 const servers = process.env.SERVERS.replace(/\s/g, '').split(/,/g);
+const ignore = new Set();
 
 const Logger = require('leekslazylogger');
-const log = new Logger({ name: 'RsN / Global Moderation' });
+const {
+	ConsoleTransport, FileTransport
+} = require('leekslazylogger/dist/transports');
+const log = new Logger({
+	name: 'RsN / Global Moderation',
+	transports: [
+		new ConsoleTransport(),
+		new FileTransport({ format: '[{timestamp}] [{LEVEL}] [{file}:{line}:{column}] {content}' })
+	]
+});
 
 const {
 	Client: DiscordClient,
@@ -27,38 +37,50 @@ class Bot extends DiscordClient {
 		});
 
 		this.on('guildBanAdd', async ban => {
-			if (!servers.includes(ban.guild.id)) return;
-			log.info(`Ban removed in "${ban.guild.name}", syncing...`);
+			if (!servers.includes(ban.guild.id)) return; // ignore foreign guilds
+			if (ignore.has(ban.user.id)) return; // prevent cascading
+			ignore.add(ban.user.id);
+			log.info(`Ban added in "${ban.guild.name}", syncing...`);
 			for (const server of servers.filter(id => id !== ban.guild.id)) {
+				const guild = this.guilds.cache.get(server);
+				if (!guild?.available) return log.warn(`Guild "${guild?.name}" is unavailable`);
 				try {
-					const guild = this.guilds.cache.get(server);
-					if (!guild?.available) return log.warn(`Guild "${guild?.name}" is unavailable`);
+					// if (guild.bans.cache.has(ban.user)) return; //  skip if they're already banned
+
 					const member = guild.members.cache.get(ban.user.id);
-					if (member && !member.bannable) return log.warn(`Can't ban "${ban.user.username}#${ban.user.discriminator}" from ${ban.guild.name}`);
-					await member.ban({
+					if (member && !member.bannable) return log.warn(`Can't ban "${ban.user.username}#${ban.user.discriminator}" from ${guild.name}`); // permission check
+
+					await guild.bans.create(ban.user.id, {
 						days: 1,
-						reason: `[SYNC] Relayed ban from \`${ban.guild.name}\` - check the origin server's audit log or ban list for details.`
-					});
-					log.info(`Banned "${ban.user.username}#${ban.user.discriminator}" from "${ban.guild.name}"`);
+						reason: `[SYNC] Relayed ban from \`${ban.guild.name}\` - check the origin server's audit log or ban list for details.${ban.reason ? `\n\n\`${ban.reason}\`` : ''}`
+					}); // ban
+					log.info(`Banned "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}"`);
 				} catch (error) {
-					log.error(`Failed to ban "${ban.user.username}#${ban.user.discriminator}" from "${ban.guild.name}":\n${error}`);
+					log.error(`Failed to ban "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}":\n${error}`);
+					// log.error(error);
 				}
 			}
+			ignore.delete(ban.user.id);
 		});
 
 		this.on('guildBanRemove', async ban => {
-			if (!servers.includes(ban.guild.id)) return;
-			log.info(`Ban added in "${ban.guild.name}", syncing...`);
+			if (!servers.includes(ban.guild.id)) return; // ignore foreign guilds
+			if (ignore.has(ban.user.id)) return; // prevent cascading
+			ignore.add(ban.user.id);
+			log.info(`Ban removed in "${ban.guild.name}", syncing...`);
 			for (const server of servers.filter(id => id !== ban.guild.id)) {
+				const guild = this.guilds.cache.get(server);
+				if (!guild?.available) return log.warn(`Guild "${guild?.name}" is unavailable`);
 				try {
-					const guild = this.guilds.cache.get(server);
-					if (!guild?.available) return log.warn(`Guild "${guild?.name}" is unavailable`);
+					// if (guild.bans.cache.has(ban.user))
 					await guild.bans.remove(ban.user.id);
-					log.info(`Unbanned "${ban.user.username}#${ban.user.discriminator}" from "${ban.guild.name}"`);
+					log.info(`Unbanned "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}"`);
 				} catch (error) {
-					log.error(`Failed to unban "${ban.user.username}#${ban.user.discriminator}" from "${ban.guild.name}":\n${error}`);
+					log.error(`Failed to unban "${ban.user.username}#${ban.user.discriminator}" from "${guild.name}":\n${error}`);
+					// log.error(error);
 				}
 			}
+			ignore.delete(ban.user.id);
 		});
 
 		this.on('guildMemberUpdate', async (_member, member) => {
