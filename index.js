@@ -9,10 +9,12 @@ const {
 	FileTransport
 } = require('leekslazylogger/dist/transports');
 const log = new Logger({
-	name: 'RsN / Global Moderation',
 	transports: [
 		new ConsoleTransport(),
-		new FileTransport({ format: '[{timestamp}] [{LEVEL}] [{file}:{line}:{column}] {content}' })
+		new FileTransport({
+			format: '[{timestamp}] [{LEVEL}] [{file}:{line}:{column}] {content}',
+			name: 'RsN / Global Moderation'
+		})
 	]
 });
 
